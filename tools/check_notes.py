@@ -243,6 +243,60 @@ def 検査G():
             print('    %-50s %d' % (s, n))
 
 
+# ===== H. 出典 (原稿番号 #レス番号) が原稿と噛み合うか =====
+def 検査H():
+    """
+    ノートの `030 #559` のような出典を、実際の原稿ファイルのレス番号マーカー
+    (`^#数字$` の行) と突き合わせる。
+
+    2026-09-18に、原稿029〜041の範囲で **話数を原稿番号として書いてしまった**
+    出典が450件見つかった（原稿030以降は「原稿番号−1」が話数のためずれる）。
+    同じ取り違えが再発しないよう常時監視する。
+    """
+    見出し('H. 出典の原稿番号')
+    本 = {}
+    範囲 = {}
+    for f in sorted(os.listdir(G)):
+        m = re.match(r'^(\d{3})_', f)
+        if not (m and f.endswith('.txt')):
+            continue
+        ns = [int(x) for x in re.findall(r'^#(\d+)$', 読む(os.path.join(G, f)), re.M)]
+        n = int(m.group(1))
+        本[n] = {str(x) for x in ns}
+        範囲[n] = (min(ns), max(ns)) if ns else None
+
+    PAT = re.compile(r'(?<![\d/])(\d{3})((?:\s*|\s*新スレ\s*)#)(\d+)')
+    一致 = 範囲内 = 0
+    ずれ = []
+    範囲外 = []
+    for p in md一覧():
+        t = 読む(p)
+        for m in PAT.finditer(t):
+            n, r = int(m.group(1)), m.group(3)
+            if n not in 本:
+                continue
+            if r in 本[n]:
+                一致 += 1
+            elif (n + 1) in 本 and r in 本[n + 1]:
+                ずれ.append((os.path.relpath(p, ROOT), n, r))
+            else:
+                rg = 範囲[n]
+                # 新スレでレス番号が折り返す原稿(lo>hi)は範囲判定しない
+                if rg and rg[0] <= rg[1] and rg[0] <= int(r) <= rg[1]:
+                    範囲内 += 1
+                else:
+                    範囲外.append((os.path.relpath(p, ROOT), n, r))
+    合計 = 一致 + 範囲内 + len(ずれ) + len(範囲外)
+    print('出典 %d 件 / マーカーと一致 %d / 範囲内で妥当 %d' % (合計, 一致, 範囲内))
+    print('範囲外（作者コメなど原稿外のレスを指している可能性） %d 件' % len(範囲外))
+    for p, n, r in ずれ[:10]:
+        NG('H', '出典が1つ前の原稿を指している: %s の %03d #%s は 原稿%03d のレス（話数と原稿番号の取り違え）' % (p, n, r, n + 1))
+    if len(ずれ) > 10:
+        NG('H', 'ほか %d 件の同種のずれ' % (len(ずれ) - 10))
+    if not ずれ:
+        print('原稿番号のずれ なし')
+
+
 def main():
     最新原稿 = 検査A()
     消えた名 = 統合表()
@@ -254,6 +308,7 @@ def main():
     個人数 = len([f for f in os.listdir(P) if f.endswith('.md')])
     検査F(個人数, 用語数, 最新原稿 or 0)
     検査G()
+    検査H()
 
     見出し('結果')
     if 参考:
