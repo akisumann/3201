@@ -297,6 +297,45 @@ def 検査H():
         print('原稿番号のずれ なし')
 
 
+# ===== I. 00_概要_旧記録.md にしか無い引用（照合の進み具合） =====
+def 検査I():
+    """
+    保全ファイル `00_概要_旧記録.md` の引用「…」のうち、他のノートのどこにも
+    断片（8文字）すら無いものを数える。
+
+    この数が0になれば、旧記録は引用の面では他へ移し終えたことになる。
+    異常ではなく進捗の指標なので NG にはしない。件数が増えたら移し漏れか
+    他ノートからの削除を疑う。
+    """
+    見出し('I. 00_概要_旧記録.md にしか無い引用')
+    自分 = os.path.join(W, '00_概要_旧記録.md')
+    if not os.path.exists(自分):
+        print('保全ファイルは無い（移行完了なら正常）')
+        return
+    他 = [p for p in md一覧() if os.path.abspath(p) != os.path.abspath(自分)]
+    全文 = re.sub(r'\s+', '', '\n'.join(読む(p) for p in 他))
+    G8 = {全文[i:i + 8] for i in range(len(全文) - 7)}
+    t = 読む(自分)
+    節 = None
+    未移行 = collections.Counter()
+    総数 = 0
+    for l in t.split('\n'):
+        if l.startswith('## '):
+            節 = l[3:]
+        if not l.startswith('- **') or not 節:
+            continue
+        for x in dict.fromkeys(re.findall(r'[「『]([^「」『』\n]{8,60})[」』]', l)):
+            総数 += 1
+            if x in 全文:
+                continue
+            xs = re.sub(r'\s+', '', x)
+            if not ({xs[i:i + 8] for i in range(len(xs) - 7)} & G8):
+                未移行[節] += 1
+    print('旧記録の引用 %d 件中、他ノートに断片も無いもの %d 件' % (総数, sum(未移行.values())))
+    for s2, n in 未移行.most_common():
+        print('  %3d  %s' % (n, s2[:52]))
+
+
 def main():
     最新原稿 = 検査A()
     消えた名 = 統合表()
@@ -309,6 +348,7 @@ def main():
     検査F(個人数, 用語数, 最新原稿 or 0)
     検査G()
     検査H()
+    検査I()
 
     見出し('結果')
     if 参考:
