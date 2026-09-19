@@ -423,6 +423,46 @@ def 検査J(最新原稿):
         NG('J', 'あらすじが原稿%03dまでしか無い（原稿は%03dまである）' % (あ, 最新原稿))
 
 
+# ===== K. 個人ファイルの ## 見出し =====
+時系列っぽい = re.compile(r'第\d+[部話章]|原稿\d{3}|\d+年前|番外|決戦|事件|襲撃|会議|防衛戦'
+                     r'|^初期|^過去|^その後|^戦後|^最期|^末路|^蘇生後|^討伐|^決着')
+
+
+def 見出しの例外():
+    """02_人物/README.md の「`##` 見出しの例外」の表から読む"""
+    rd = 読む(os.path.join(W, '02_人物', 'README.md'))
+    許可 = set()
+    for m in re.finditer(r'^\|\s*`([^`]+\.md)`\s*\|\s*`## ([^`]+)`', rd, re.M):
+        許可.add((m.group(1), m.group(2).strip()))
+    return 許可
+
+
+def 検査K():
+    見出し('K. 個人ファイルの ## 見出し')
+    許可 = 見出しの例外()
+    print('話題別と確認済みの例外: %d 件' % len(許可))
+    n = 0
+    使われた = set()
+    for f in sorted(os.listdir(P)):
+        if not f.endswith('.md'):
+            continue
+        for m in re.finditer(r'(?m)^## (.+)$', 読む(os.path.join(P, f))):
+            題 = m.group(1).strip()
+            if not 時系列っぽい.search(題):
+                continue
+            if (f, 題) in 許可:
+                使われた.add((f, 題))
+                continue
+            n += 1
+            NG('K', '出来事名に見える ## 見出し: %s の `## %s`'
+                    '（`## 時系列記録` の下へ `### ` で入れるか、'
+                    '話題別なら 02_人物/README.md の例外の表へ足す）' % (f, 題))
+    for k in sorted(許可 - 使われた):
+        NG('K', '例外の表に書いてあるが実物が無い: %s の `## %s`' % k)
+    if not n:
+        print('出来事名に見える ## 見出し なし')
+
+
 def main():
     最新原稿 = 検査A()
     消えた名 = 統合表()
@@ -437,6 +477,7 @@ def main():
     検査H()
     検査I()
     検査J(最新原稿)
+    検査K()
 
     見出し('結果')
     if 参考:
