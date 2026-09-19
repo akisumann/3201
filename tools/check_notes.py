@@ -295,7 +295,9 @@ def 検査H():
         m = re.match(r'^(\d{3})_', f)
         if not (m and f.endswith('.txt')):
             continue
-        ns = [int(x) for x in re.findall(r'^#(\d+)$', 読む(os.path.join(G, f)), re.M)]
+        # 原稿133は `# 643` と空白入りで書かれている。原稿は無改変で保存するので
+        # こちら側で両方を拾う。空白を許さないと133の出典が一件も検証されない。
+        ns = [int(x) for x in re.findall(r'^#\s*(\d+)\s*$', 読む(os.path.join(G, f)), re.M)]
         n = int(m.group(1))
         本[n] = {str(x) for x in ns}
         範囲[n] = (min(ns), max(ns)) if ns else None
