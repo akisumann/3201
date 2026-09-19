@@ -169,6 +169,31 @@ def 検査D():
     for k, v in sorted(用語.items()):
         if len(v) > 1:
             NG('D', '用語名の重複: 「%s」 %s' % (k, v))
+
+    # 用語集以外の表も列ずれを見る。ヘッダより多い列は Markdown が捨てるため、
+    # 書いた内容が表示されない（2026-09-19に用語集25行・地理114行でこれが起きていた）
+    for 相対 in ['03_地理.md', '05_社会・制度.md', '04_歴史・年表.md']:
+        p2 = os.path.join(W, 相対)
+        if not os.path.exists(p2):
+            continue
+        列数 = None
+        ずれ = 0
+        for i, l in enumerate(読む(p2).split('\n'), 1):
+            if not l.startswith('|'):
+                continue
+            c = [x.strip() for x in l.strip().strip('|').split('|')]
+            if set(c[0]) <= set('-'):
+                continue
+            # 見出し行（次が区切り行）を列数の基準にする
+            if 列数 is None or c[0] in ('地名', '地区', '用語', '時期', '年代', '項目'):
+                列数 = len(c)
+                continue
+            if len(c) != 列数:
+                ずれ += 1
+                if ずれ <= 3:
+                    NG('D', '%s:%d 列数が見出しと違う(見出し%d列/この行%d列): %s' % (相対, i, 列数, len(c), c[0][:24]))
+        if ずれ > 3:
+            NG('D', '%s ほか %d 行で同じ列ずれ' % (相対, ずれ - 3))
     return 合計
 
 
