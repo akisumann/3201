@@ -368,6 +368,51 @@ def 検査I():
         print('  %3d  %s' % (n, s2[:52]))
 
 
+# ===== J. 年表・あらすじが追えている原稿番号 =====
+def 出典の原稿番号(行):
+    """表の行の最終列から原稿番号だけを取り出す（#レス番号は捨てる）"""
+    セル = 行.strip().strip('|').split('|')[-1]
+    セル = re.sub(r'#\d+(?:-\d+)?', '', セル)
+    return [int(x) for x in re.findall(r'\d{3}', セル)]
+
+
+def 検査J(最新原稿):
+    見出し('J. 年表・あらすじの収録範囲')
+    本文 = 読む(os.path.join(W, '04_歴史・年表.md'))
+    if '## 本編' not in 本文:
+        NG('J', '04_歴史・年表.md に「## 本編」の節が無い'); return
+    本編 = 本文[本文.index('## 本編'):]
+    本編 = 本編[:本編.index('\n## ', 1)] if '\n## ' in 本編[1:] else 本編
+    最大 = 0
+    for ブロック in re.split(r'^### ', 本編, flags=re.M)[1:]:
+        題 = ブロック.split('\n', 1)[0].strip()
+        行 = [x for x in ブロック.split('\n')
+              if x.startswith('| ') and not x.startswith('| 時期 |')]
+        番号 = [n for x in 行 for n in 出典の原稿番号(x)]
+        if 番号:
+            最大 = max(最大, max(番号))
+            print('  %-34s %3d行 / 原稿%03d〜%03d' % (題, len(行), min(番号), max(番号)))
+        else:
+            print('  %-34s %3d行' % (題, len(行)))
+    print('年表の本編が収録している最新の原稿: %03d' % 最大)
+    if 最新原稿 and 最大 < 最新原稿:
+        NG('J', '年表が原稿%03dまでしか無い（原稿は%03dまである）。'
+                '新しい話を年表へ入れ忘れている' % (最大, 最新原稿))
+
+    d = os.path.join(W, '06_あらすじ')
+    あ = 0
+    for f in sorted(os.listdir(d)):
+        if not f.endswith('.md') or f == 'README.md':
+            continue
+        番号 = [int(x) for x in re.findall(r'原稿(\d{3})', 読む(os.path.join(d, f)))]
+        if 番号:
+            あ = max(あ, max(番号))
+            print('  %-34s 原稿%03d〜%03d' % (f, min(番号), max(番号)))
+    print('あらすじが言及している最新の原稿: %03d' % あ)
+    if 最新原稿 and あ < 最新原稿:
+        NG('J', 'あらすじが原稿%03dまでしか無い（原稿は%03dまである）' % (あ, 最新原稿))
+
+
 def main():
     最新原稿 = 検査A()
     消えた名 = 統合表()
@@ -381,6 +426,7 @@ def main():
     検査G()
     検査H()
     検査I()
+    検査J(最新原稿)
 
     見出し('結果')
     if 参考:
