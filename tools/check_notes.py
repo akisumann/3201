@@ -21,6 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 W = os.path.join(ROOT, '世界観')
 G = os.path.join(ROOT, '原稿')
 P = os.path.join(W, '02_人物', '個人')
+S = os.path.join(W, '07_読書スナップショット')
 
 問題 = []
 参考 = []
@@ -506,6 +507,73 @@ def 検査K():
         print('出来事名に見える ## 見出し なし')
 
 
+def スナップショット対応表():
+    """`07_読書スナップショット/README.md` の対応表から
+    {ファイル名: (開始原稿, 終了原稿)} を読む。
+    許可リストをスクリプト内に持たないのは、ノート側を更新し忘れたときに
+    鳴らすため（「似た名前でも統合してはいけない組」と同じ設計）。"""
+    p = os.path.join(S, 'README.md')
+    if not os.path.exists(p):
+        return {}
+    t = 読む(p)
+    見出し名 = '## ★ ファイル名と収録原稿の対応表'
+    if 見出し名 not in t:
+        return {}
+    節 = t.split(見出し名, 1)[1].split('\n## ', 1)[0]
+    出 = {}
+    for 行 in 節.split('\n'):
+        if not 行.startswith('|') or 行.startswith('|--'):
+            continue
+        セル = [x.strip() for x in 行.strip().strip('|').split('|')]
+        if len(セル) < 2:
+            continue
+        m = re.match(r'^`(\d{3}(?:-\d{3})?\.md)`$', セル[0])
+        if not m:
+            continue
+        r = re.search(r'(\d{3})(?:〜(\d{3}))?', セル[1].replace('*', ''))
+        if not r:
+            continue
+        a = int(r.group(1))
+        b = int(r.group(2) or r.group(1))
+        出[m.group(1)] = (a, b)
+    return 出
+
+
+def 検査L(最新原稿):
+    見出し('L. 読書スナップショットの収録範囲')
+    表 = スナップショット対応表()
+    if not 表:
+        NG('L', '`07_読書スナップショット/README.md` に'
+                '「★ ファイル名と収録原稿の対応表」が見つからない')
+        return
+    実物 = set(f for f in os.listdir(S)
+               if re.match(r'^\d{3}(-\d{3})?\.md$', f))
+    print('対応表 %d 行 / 実ファイル %d 件' % (len(表), len(実物)))
+    for f in sorted(実物 - set(表)):
+        NG('L', 'スナップショットが対応表に無い: %s'
+                '（07_読書スナップショット/README.md の表へ行を足す）' % f)
+    for f in sorted(set(表) - 実物):
+        NG('L', '対応表にあるが実ファイルが無い: %s' % f)
+
+    覆う = {}
+    for f, (a, b) in 表.items():
+        if f not in 実物:
+            continue
+        for n in range(a, b + 1):
+            覆う.setdefault(n, []).append(f)
+    上限 = 最新原稿 or (max(覆う) if 覆う else 0)
+    欠け = [n for n in range(1, 上限 + 1) if n not in 覆う]
+    if 欠け:
+        NG('L', 'どのスナップショットにも入っていない原稿: %s'
+                % ', '.join('%03d' % n for n in 欠け))
+    else:
+        print('原稿001〜%03d は対応表で漏れなく覆われている' % 上限)
+    重なり = sorted(n for n, v in 覆う.items() if len(v) > 1)
+    if 重なり:
+        print('複数のファイルに入っている原稿: %s（早い時点のチェックポイントは残す方針）'
+              % ', '.join('%03d' % n for n in 重なり))
+
+
 def main():
     放棄 = 放棄した連番()
     最新原稿 = 検査A(放棄)
@@ -527,6 +595,7 @@ def main():
     検査I()
     検査J(最新原稿)
     検査K()
+    検査L(最新原稿)
 
     見出し('結果')
     if 参考:
