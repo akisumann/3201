@@ -87,10 +87,19 @@ def 検査A(放棄=None):
         見本 = ['%03d' % i for i in 欠番[:20]]
         NG('A', '連番の欠番 %d 件: %s%s' % (len(欠番), '、'.join(見本), ' ほか' if len(欠番) > 20 else ''))
     # 放棄した連番があれば、そこが空いているので次に受け取るのはその番号。
-    次 = min(放棄) if 放棄 else 上限 + 1
+    # 放棄した連番の実ファイルが戻ってきたら、表から行を消すまで運用が噛み合わない。
+    # 「README の表に無い原稿」という一般的な文言では何をすべきか分からないので、
+    # ここで名指しして手順を出す。
+    戻った = sorted(set(放棄) & set(nums))
+    for n in 戻った:
+        NG('A', '放棄した連番 %03d の実ファイルがある。'
+                '`原稿/README.md` の「放棄した連番」の表から %03d の行を消し、'
+                '本表へ1行足すこと（消すまで「次の連番」が %03d のままになる）' % (n, n, n))
+    有効な放棄 = {k: v for k, v in 放棄.items() if k not in nums}
+    次 = min(有効な放棄) if 有効な放棄 else 上限 + 1
     print('原稿 %d 件 / 範囲 %03d〜%03d / 次の連番は %03d' % (len(nums), lo, hi, 次))
-    for n in sorted(放棄):
-        print('  放棄した連番 %03d（受領待ち） … %s' % (n, 放棄[n][:56]))
+    for n in sorted(有効な放棄):
+        print('  放棄した連番 %03d（受領待ち） … %s' % (n, 有効な放棄[n][:56]))
 
     rd = 読む(os.path.join(G, 'README.md'))
     rows = {}
@@ -508,7 +517,10 @@ def main():
         検査E(最新原稿)
     個人数 = len([f for f in os.listdir(P) if f.endswith('.md')])
     原稿数 = len([f for f in os.listdir(G) if f.endswith('.txt') and re.match(r'^\d{3}_', f)])
-    次の連番 = min(放棄) if 放棄 else 原稿数 + 1
+    残る放棄 = [n for n in 放棄
+                if not os.path.exists(os.path.join(G, '%03d_' % n)) and
+                not any(f.startswith('%03d_' % n) for f in os.listdir(G))]
+    次の連番 = min(残る放棄) if 残る放棄 else 原稿数 + 1
     検査F(個人数, 用語数, 原稿数, 次の連番)
     検査G()
     検査H()
