@@ -339,7 +339,14 @@ def 検査H():
             continue
         # 原稿133は `# 643` と空白入りで書かれている。原稿は無改変で保存するので
         # こちら側で両方を拾う。空白を許さないと133の出典が一件も検証されない。
-        ns = [int(x) for x in re.findall(r'^#\s*(\d+)\s*$', 読む(os.path.join(G, f)), re.M)]
+        本文 = 読む(os.path.join(G, f))
+        ns = [int(x) for x in re.findall(r'^#\s*(\d+)\s*$', 本文, re.M)]
+        # 原稿071以降には `#316-327` という範囲形式のマーカーがある（345本）。
+        # 展開しないと、その範囲を指す出典が全部「範囲外」として鳴る。
+        for a_, b_ in re.findall(r'^#\s*(\d+)\s*-\s*(\d+)\s*$', 本文, re.M):
+            a_, b_ = int(a_), int(b_)
+            if 0 < b_ - a_ < 500:
+                ns.extend(range(a_, b_ + 1))
         n = int(m.group(1))
         本[n] = {str(x) for x in ns}
         範囲[n] = (min(ns), max(ns)) if ns else None

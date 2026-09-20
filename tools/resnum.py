@@ -10,9 +10,15 @@ import re, sys, os
 def markers(path):
     out = []
     for i, line in enumerate(open(path, encoding='utf-8'), 1):
-        m = re.match(r'^#\s*(\d+)\s*$', line.rstrip('\n'))
+        t = line.rstrip('\n')
+        m = re.match(r'^#\s*(\d+)\s*$', t)
         if m:
-            out.append((i, int(m.group(1))))
+            out.append((i, m.group(1)))
+            continue
+        # 原稿071以降には `#316-327` という範囲形式のマーカーがある（345本）
+        m = re.match(r'^#\s*(\d+)\s*-\s*(\d+)\s*$', t)
+        if m:
+            out.append((i, f"{m.group(1)}-{m.group(2)}"))
     return out
 
 def lookup(path, lineno):
