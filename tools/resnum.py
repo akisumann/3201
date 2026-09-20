@@ -15,8 +15,9 @@ def markers(path):
         if m:
             out.append((i, m.group(1)))
             continue
-        # 原稿071以降には `#316-327` という範囲形式のマーカーがある（345本）
-        m = re.match(r'^#\s*(\d+)\s*-\s*(\d+)\s*$', t)
+        # 原稿071以降には `#316-327` `#84～93` という範囲形式のマーカーがある（計976本／40原稿）。
+        # 区切りはハイフンと全角チルダの2種類
+        m = re.match(r'^#\s*(\d+)\s*[-−–—〜～]\s*(\d+)\s*$', t)
         if m:
             out.append((i, f"{m.group(1)}-{m.group(2)}"))
     return out
