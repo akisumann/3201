@@ -43,7 +43,30 @@ def 読む(p):
 
 
 # ===== A. 原稿の連番・命名・README表 =====
-def 検査A():
+def 放棄した連番():
+    """`原稿/README.md` の「放棄した連番」の表から読む。
+
+    整形前の途中版を誤って受け取ったときなど、その連番を一旦取り下げることがある。
+    実ファイルは無いが、世界観ノート側の記述と版表記はその番号のまま残す運用なので、
+    欠番として鳴らさず、版表記の上限としては有効な番号として扱う。
+    許可リストをスクリプト内に持たないのは、ノート側を消し忘れたときに気付けるようにするため。
+    """
+    rd = 読む(os.path.join(G, 'README.md'))
+    if '## 放棄した連番' not in rd:
+        return {}
+    節 = rd.split('## 放棄した連番', 1)[1].split('\n## ', 1)[0]
+    出 = {}
+    for 行 in 節.split('\n'):
+        if not 行.startswith('|') or 行.startswith('|--'):
+            continue
+        セル = [x.strip() for x in 行.strip().strip('|').split('|')]
+        if セル and re.fullmatch(r'\d{3}', セル[0]):
+            出[int(セル[0])] = セル[1] if len(セル) > 1 else ''
+    return 出
+
+
+def 検査A(放棄=None):
+    放棄 = 放棄 or {}
     見出し('A. 原稿の連番と 原稿/README.md の表')
     files = sorted(f for f in os.listdir(G) if f.endswith('.txt'))
     nums = {}
@@ -58,11 +81,16 @@ def 検査A():
     if not nums:
         NG('A', '原稿が1件も見つからない'); return None
     lo, hi = min(nums), max(nums)
-    欠番 = [i for i in range(lo, hi + 1) if i not in nums]
+    上限 = max([hi] + list(放棄))
+    欠番 = [i for i in range(lo, 上限 + 1) if i not in nums and i not in 放棄]
     if 欠番:
         見本 = ['%03d' % i for i in 欠番[:20]]
         NG('A', '連番の欠番 %d 件: %s%s' % (len(欠番), '、'.join(見本), ' ほか' if len(欠番) > 20 else ''))
-    print('原稿 %d 件 / 範囲 %03d〜%03d / 次の連番は %03d' % (len(nums), lo, hi, hi + 1))
+    # 放棄した連番があれば、そこが空いているので次に受け取るのはその番号。
+    次 = min(放棄) if 放棄 else 上限 + 1
+    print('原稿 %d 件 / 範囲 %03d〜%03d / 次の連番は %03d' % (len(nums), lo, hi, 次))
+    for n in sorted(放棄):
+        print('  放棄した連番 %03d（受領待ち） … %s' % (n, 放棄[n][:56]))
 
     rd = 読む(os.path.join(G, 'README.md'))
     rows = {}
@@ -71,12 +99,14 @@ def 検査A():
     print('原稿/README.md の表: %d 行' % len(rows))
     for n in sorted(set(nums) - set(rows)):
         NG('A', 'README の表に無い原稿: %03d %s' % (n, nums[n]))
-    for n in sorted(set(rows) - set(nums)):
+    for n in sorted(set(rows) - set(nums) - set(放棄)):
         NG('A', '実ファイルが無い README 行: %03d' % n)
     for n, fn in sorted(rows.items()):
         if n in nums and nums[n] != fn:
             NG('A', 'README のファイル名が実物と違う: %03d 表=%s 実=%s' % (n, fn, nums[n]))
-    return hi
+    # 版表記・年表・あらすじの上限は、放棄した連番も含めた番号で見る。
+    # ノート側の記述はその番号のまま残す運用のため。
+    return 上限
 
 
 # ===== B. ノート内の .md 参照が実在するか =====
@@ -236,7 +266,7 @@ def 検査E(最新原稿):
 
 
 # ===== F. 説明文に書かれた数と実数 =====
-def 検査F(個人数, 用語数, 原稿数):
+def 検査F(個人数, 用語数, 原稿数, 次の連番=None):
     見出し('F. CLAUDE.md・README に書かれた数と実数')
     実数 = {'個人ファイル': 個人数, '用語集の項目': 用語数, '原稿': 原稿数}
     for k, v in 実数.items():
@@ -248,9 +278,11 @@ def 検査F(個人数, 用語数, 原稿数):
     for m in re.finditer(r'（(\d+)項目、用語名の重複ゼロ）', c):
         if int(m.group(1)) != 用語数:
             NG('F', 'CLAUDE.md の用語集項目数が実数と違う: 記載%s / 実数%d' % (m.group(1), 用語数))
+    # 放棄した連番があると「次の連番」は原稿数+1 とは限らない（空いた番号が先）。
+    期待 = 次の連番 if 次の連番 else 原稿数 + 1
     for m in re.finditer(r'次の連番は(\d+)', c):
-        if int(m.group(1)) != 原稿数 + 1:
-            NG('F', 'CLAUDE.md の「次の連番」が実数と違う: 記載%s / 実数%d' % (m.group(1), 原稿数 + 1))
+        if int(m.group(1)) != 期待:
+            NG('F', 'CLAUDE.md の「次の連番」が実数と違う: 記載%s / 実数%d' % (m.group(1), 期待))
 
 
 # ===== G. 99_未確定の項目数 =====
@@ -466,7 +498,8 @@ def 検査K():
 
 
 def main():
-    最新原稿 = 検査A()
+    放棄 = 放棄した連番()
+    最新原稿 = 検査A(放棄)
     消えた名 = 統合表()
     検査B(消えた名)
     検査C(別人表())
@@ -474,7 +507,9 @@ def main():
     if 最新原稿:
         検査E(最新原稿)
     個人数 = len([f for f in os.listdir(P) if f.endswith('.md')])
-    検査F(個人数, 用語数, 最新原稿 or 0)
+    原稿数 = len([f for f in os.listdir(G) if f.endswith('.txt') and re.match(r'^\d{3}_', f)])
+    次の連番 = min(放棄) if 放棄 else 原稿数 + 1
+    検査F(個人数, 用語数, 原稿数, 次の連番)
     検査G()
     検査H()
     検査I()
